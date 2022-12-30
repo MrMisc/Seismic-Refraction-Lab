@@ -1,0 +1,237 @@
+%-------------------------------------------------------------------------
+% Seismic Lab
+% Irshad Ul Ala
+%
+pickingFlag = 0; % CHANGE THIS TO 1 if you want to pick data.
+%-------------------------------------------------------------------------
+infile = 'str1d2021'; % Change this to see different shots: str1u2021 str1d2021
+%-------------------------------------------------------------------------
+plusminusFlag = 1; % Change this once you have your picks and are ready
+%-------------------------------------------------------------------------
+
+
+switch infile
+    case 'str1u2021'
+        shotloc = 100.00;
+    case 'str1d2021'
+        shotloc = 148.50;
+    otherwise
+        disp('File unknown! Check infile parameter')
+end
+
+
+xint = 1; % Geophone spacing
+tint = 0.0005; % sampling interval
+recordLength = 0.300;
+t=0:tint:recordLength; %0:sampleInterval:recordLength
+ntraces = 48;
+channels=1:1:ntraces;  %linspace function
+
+A = SegYFileReader(strcat('./',infile,'.sgy')); % Get trace headers
+[traces,th] = readTraceData(A); % Get data
+
+figure, wiggle(t,channels,traces)
+xlabel('Channel Trace')
+ylabel('Time (s)')
+
+if pickingFlag == 1
+    figh = gcf;
+
+    disp('Pick the first breaks. Pick them all, or press enter to continue.')
+    [x,y]=ginputc(ntraces);
+    waitfor(figh)
+
+    channel = round(x);
+
+    switch infile
+        case 'str1u2021'
+            upx = (100 +(channel*xint)) -shotloc;
+            upt = y;
+            dat = [channel, upx, upt];
+            save('./upshotpicks.mat','dat')
+        case 'str1d2021'
+            downx = (100 +(channel*xint)) -shotloc;
+            downt = y;
+            dat = [channel,downx, downt];
+            save('./downshotpicks.mat','dat')
+        otherwise
+            disp('Unknown shot')
+    end
+
+end
+
+
+
+
+%Plotting our upshotdata
+
+[channel,I] = sort(upshot(:,1));
+offset = upshot(I,2);
+time = upshot(I,3);
+figure, plot(offset,time,'x')
+xlabel('Offset')
+ylabel('Time (s)')
+
+%Plotting our downshotdata
+
+[channel,I] = sort(downshot(:,1));
+offset = downshot(I,2);
+time = downshot(I,3);
+figure, plot(offset,time,'x')
+xlabel('Offset')
+ylabel('Time (s)')
+
+
+
+
+%Fitting for upshot
+[channel,I] = sort(upshot(:,1));
+offset = upshot(I,2);
+time = upshot(I,3);
+figure, plot(offset,time,'x')
+xlabel('Offset')
+ylabel('Time (s)')
+
+
+start =  10;
+stop = 48;
+
+[P,S] = polyfit(offset(start:stop),time(start:stop),1);
+gcf; hold on
+plot(offset(start:stop),polyval(P,offset(start:stop)),'-')
+xlabel('Offset')
+ylabel('Time')
+title(infile)
+
+assignin('base','P',P)  %Assign v1 or v2_upshot to P(1) here
+
+
+
+
+
+%Fitting for downshot
+
+
+[channel,I] = sort(downshot(:,1));
+offset = downshot(I,2);
+time = downshot(I,3);
+figure, plot(offset,time,'x')
+xlabel('Offset')
+ylabel('Time (s)')
+
+start =  7;
+stop = 40;
+
+[P,S] = polyfit(offset(start:stop),time(start:stop),1);
+gcf; hold on
+plot(offset(start:stop),polyval(P,offset(start:stop)),'-')
+xlabel('Offset')
+ylabel('Time')
+title(infile)
+
+assignin('base','P',P)  %Assign v1_upshot to P(1) here
+
+
+%Plotting picks for both upshot and downshot together
+
+    up = load('./upshotpicks.mat');
+    down = load('./downshotpicks.mat');
+    [~,Iup] = sort(up.dat(:,1));
+    [~,Idown] = sort(down.dat(:,1));
+    for m=1:size(up.dat,2)
+        up.dat(:,m) = up.dat(Iup,m);
+        down.dat(:,m) = down.dat(Idown,m);
+    end
+    %v=500
+    figure, plot(up.dat(Iup,1),up.dat(Iup,3),'rx')
+    hold on, plot(down.dat(Idown,1),down.dat(Idown,3),'bx')
+    legend('Up','Down','location','best')
+    xlim([0.5,48.5]) % Assumes shot locations were half a geophone spacing offset.
+    grid on
+    
+    
+    
+    %Plus-Minus Method
+    
+      channelon = 5; % This is where you specify what part of the profile to use.
+    channeloff = 40;
+    l = 48.5; % s1-s2 distance
+    x = abs(down.dat(channelon:channeloff,2));
+
+    ts1s2 = (0.0387898+0.0403185)/2.; % Check this is correct for your picks
+
+    minusterm = up.dat(channelon:channeloff,3) -down.dat(channelon:channeloff,3);
+    plusterm = 0.5*(up.dat(channelon:channeloff,3) +down.dat(channelon:channeloff,3) -ts1s2);
+
+    % Let's plot the minus terms - what does this tell us? Include a comment on
+    % this in your report.
+    figure, plot((2*x)-l,minusterm,'x')
+    p=polyfit((2*x)-l,minusterm,1);  %Fitted line - Maybe find how well the plots fit
+    v2 = 1/abs(p(1));
+    xlabel('2x-l')
+    ylabel('tS1D-tS2D')
+    
+    
+    
+    %Using p;us term to visualise dipping lower layer
+    
+        v = (v1_upshot+v1_downshot)/2; % Average of v1_upshot and v1_downshot
+    z = (plusterm*v*v2)./((v2^2 -v^2)^0.5);
+    % Now plot the resulting depth along the profile, along with the dipping
+    % planar solution you obtained earlier.
+
+    % Plotting plus minus results and overlaying planar horizontal results
+    figure, plot(offset(channelon:channeloff),-z)
+    grid on
+    hold on
+    planaroffsets = [min(offset),max(offset)];
+    
+    
+    
+    
+    
+    
+    
+    %XXXXXXXXXXXXXXXXCalculation for perpendicular depth at 
+    
+    %On left side of profile,we choose channelon
+    deltaD = .5*(up.dat(channelon,3)+down.dat(channelon,3)-ts1s2)
+    z_left = deltaD*(v*v2)*(v2^2-v^2)^(-.5)
+    
+    %On right side of profile, we choose channeloff
+    deltaD2 = .5*(up.dat(channeloff,3)+down.dat(channeloff,3)-ts1s2)
+    z_right = deltaD2*(v*v2)*(v2^2-v^2)^(-.5)
+    
+    %planardepths = [-z_left,-z_right]; 
+    plot(planaroffsets,planardepths,'--')
+    %XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    
+    
+    
+    
+    
+    
+    
+    %Dipping planar method
+    
+    theta12 = .5*(asin(v/v2_downshot)+asin(v/v2_upshot))
+    gamma1 = .5*(asin(v/v2_downshot)-asin(v/v2_upshot))
+    v2_dippingmethod = v/sin(theta12)  
+    z_shallow = v*t2_upshot/(2*cos(theta12))
+    z_deep = v*t2_downshot/(2*cos(theta12))
+    
+    h_shallow = z_shallow/cos(gamma1)
+    h_deep = z_deep/cos(gamma1)
+    
+    
+    planardepths = [-h_shallow,-h_deep]; 
+       
+    figure, plot(offset(channelon:channeloff),-z)
+    grid on
+    hold on
+    planaroffsets = [min(offset),max(offset)];
+    [model,intercept] = polyfit(offset(channelon:channeloff),-z,1)
+    eval = polyval(model, offset(channelon:channeloff))
+    plot(offset(channelon:channeloff), eval,':')
+    plot(planaroffsets,planardepths,'--')
+    
